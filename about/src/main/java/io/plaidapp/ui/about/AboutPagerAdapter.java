@@ -16,9 +16,7 @@
 
 package io.plaidapp.ui.about;
 
-import android.app.Activity;
 import android.content.res.ColorStateList;
-import android.content.res.Resources;
 import android.support.annotation.ColorInt;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -38,7 +36,7 @@ import android.widget.TextView;
 
 import java.security.InvalidParameterException;
 
-import in.uncod.android.bypass.Bypass;
+import androidx.core.text.CharSequenceKt;
 import io.plaidapp.about.R;
 import io.plaidapp.core.util.ColorUtils;
 import io.plaidapp.core.util.HtmlUtils;
@@ -55,16 +53,12 @@ class AboutPagerAdapter extends PagerAdapter {
     @Nullable
     private RecyclerView libsList;
 
-    private final LayoutInflater layoutInflater;
-    private final Bypass markdown;
-    private final Activity host;
-    private final Resources resources;
+    private LayoutInflater layoutInflater;
 
-    AboutPagerAdapter(@NonNull Activity host) {
-        this.host = host;
-        resources = host.getResources();
-        layoutInflater = LayoutInflater.from(host);
-        markdown = new Bypass(host, new Bypass.Options());
+    private final AboutViewModel aboutViewModel;
+
+    AboutPagerAdapter(@NonNull AboutViewModel aboutViewModel) {
+        this.aboutViewModel = aboutViewModel;
     }
 
     @NonNull
@@ -91,6 +85,7 @@ class AboutPagerAdapter extends PagerAdapter {
     }
 
     private View getPage(int position, ViewGroup parent) {
+        assureLayoutInflaterInitialized(parent);
         switch (position) {
             case 0:
                 if (aboutPlaid == null) {
@@ -111,76 +106,29 @@ class AboutPagerAdapter extends PagerAdapter {
         throw new InvalidParameterException();
     }
 
+    private void assureLayoutInflaterInitialized(View view) {
+        if (layoutInflater == null) {
+            layoutInflater = LayoutInflater.from(view.getContext());
+        }
+    }
+
     private void buildLibsAboutPage(ViewGroup parent) {
         aboutLibs = layoutInflater.inflate(R.layout.about_libs, parent, false);
         bindViews(aboutLibs);
-        libsList.setAdapter(new LibraryAdapter(host));
+        libsList.setAdapter(new LibraryAdapter(aboutViewModel.getLibraries()));
     }
 
     private void buildIconAboutPage(ViewGroup parent) {
         aboutIcon = layoutInflater.inflate(R.layout.about_icon, parent, false);
         bindViews(aboutIcon);
-
-        ColorStateList linksColor = ContextCompat.getColorStateList(host,
-                io.plaidapp.R.color.plaid_links);
-        int highlightColor = ColorUtils.getThemeColor(host, io.plaidapp.R.attr.colorPrimary,
-                io.plaidapp.R.color.primary);
-        HtmlUtils.setTextWithNiceLinks(iconDescription,
-                getIconAboutText(linksColor, highlightColor));
+        HtmlUtils.setTextWithNiceLinks(iconDescription, aboutViewModel.getIconAboutText());
     }
 
     private void buildAppAboutPage(ViewGroup parent) {
         aboutPlaid = layoutInflater.inflate(R.layout.about_plaid, parent, false);
         bindViews(aboutPlaid);
 
-        ColorStateList linksColor = ContextCompat.getColorStateList(host,
-                io.plaidapp.R.color.plaid_links);
-        int highlightColor = ColorUtils.getThemeColor(host, io.plaidapp.R.attr.colorPrimary,
-                io.plaidapp.R.color.primary);
-        CharSequence desc = getAppAboutText(linksColor, highlightColor);
-
-        HtmlUtils.setTextWithNiceLinks(plaidDescription, desc);
-    }
-
-    private CharSequence getSpannableFromMarkdown(
-            @StringRes int stringId,
-            ColorStateList linksColor,
-            @ColorInt int highlightColor) {
-        return markdown.markdownToSpannable(resources.getString(stringId), linksColor,
-                highlightColor, null);
-    }
-
-    private CharSequence getAppAboutText(
-            ColorStateList linksColor,
-            @ColorInt int highlightColor
-    ) {
-        // fun with spans & markdown
-        CharSequence about0 = getSpannableFromMarkdown(R.string.about_plaid_0, linksColor,
-                highlightColor);
-        SpannableString about1 = new SpannableString(
-                resources.getString(R.string.about_plaid_1));
-        about1.setSpan(new AlignmentSpan.Standard(Layout.Alignment.ALIGN_CENTER),
-                0, about1.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        SpannableString about2 = new SpannableString(
-                getSpannableFromMarkdown(R.string.about_plaid_2, linksColor, highlightColor));
-        about2.setSpan(new AlignmentSpan.Standard(Layout.Alignment.ALIGN_CENTER),
-                0, about2.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        SpannableString about3 = new SpannableString(
-                getSpannableFromMarkdown(R.string.about_plaid_3, linksColor, highlightColor));
-        about3.setSpan(new AlignmentSpan.Standard(Layout.Alignment.ALIGN_CENTER),
-                0, about3.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        return TextUtils.concat(about0, "\n\n", about1, "\n", about2,
-                "\n\n", about3);
-    }
-
-    private CharSequence getIconAboutText(
-            ColorStateList linksColor,
-            @ColorInt int highlightColor
-    ) {
-        CharSequence icon0 = resources.getString(R.string.about_icon_0);
-        CharSequence icon1 = getSpannableFromMarkdown(R.string.about_icon_1, linksColor,
-                highlightColor);
-        return TextUtils.concat(icon0, "\n", icon1);
+        HtmlUtils.setTextWithNiceLinks(plaidDescription, aboutViewModel.getAppAboutText());
     }
 
     private void bindViews(View parent) {
