@@ -67,6 +67,7 @@ import com.bumptech.glide.load.resource.bitmap.BitmapTransitionOptions;
 
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
@@ -80,8 +81,10 @@ import io.plaidapp.core.designernews.data.api.model.Story;
 import io.plaidapp.core.designernews.data.api.model.User;
 import io.plaidapp.core.designernews.data.api.votes.DesignerNewsVotesRepository;
 import io.plaidapp.core.ui.transitions.GravityArcMotion;
+import io.plaidapp.core.ui.transitions.MorphTransform;
 import io.plaidapp.core.ui.transitions.ReflowText;
 import io.plaidapp.core.ui.widget.CollapsingTitleLayout;
+import io.plaidapp.core.ui.widget.ElasticDragDismissFrameLayout;
 import io.plaidapp.core.util.Activities;
 import io.plaidapp.core.util.HtmlUtils;
 import io.plaidapp.core.util.ImeUtils;
@@ -92,8 +95,6 @@ import io.plaidapp.core.util.glide.ImageSpanTarget;
 import io.plaidapp.designernews.R;
 import io.plaidapp.ui.designernews.DesignerNewsLogin;
 import io.plaidapp.ui.drawable.ThreadedCommentDrawable;
-import io.plaidapp.core.ui.transitions.MorphTransform;
-import io.plaidapp.core.ui.widget.ElasticDragDismissFrameLayout;
 import io.plaidapp.ui.widget.PinnedOffsetView;
 import kotlin.Unit;
 import retrofit2.Call;
@@ -506,8 +507,10 @@ public class DesignerNewsStory extends Activity {
                             .TextAppearance_CommentAuthor),
                     0, poster.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             CharSequence job =
-                    !TextUtils.isEmpty(story.getUserJob()) ? "\n" + story.getUserJob().toLowerCase() : "";
-            CharSequence timeAgo = DateUtils.getRelativeTimeSpanString(story.getCreatedAt().getTime(),
+                    !TextUtils.isEmpty(story.getUserJob()) ? "\n" + story.getUserJob().toLowerCase()
+                            : "";
+            CharSequence timeAgo = DateUtils.getRelativeTimeSpanString(
+                    story.getCreatedAt().getTime(),
                     System.currentTimeMillis(),
                     DateUtils.SECOND_IN_MILLIS)
                     .toString().toLowerCase();
@@ -626,7 +629,8 @@ public class DesignerNewsStory extends Activity {
     private void unnestComments(List<Comment> nested, List<Comment> flat) {
         for (Comment comment : nested) {
             flat.add(comment);
-            if (comment.getReplies() != null && comment.getReplies().size() > 0) {
+            comment.getReplies();
+            if (comment.getReplies().size() > 0) {
                 unnestComments(comment.getReplies(), flat);
             }
         }
@@ -762,7 +766,7 @@ public class DesignerNewsStory extends Activity {
             do {
                 commentIndex++;
             } while (commentIndex < comments.size() &&
-                    comments.get(commentIndex).depth >= newComment.depth);
+                    comments.get(commentIndex).getDepth() >= newComment.getDepth());
             comments.add(commentIndex, newComment);
             int adapterPosition = commentIndexToAdapterPosition(commentIndex);
             notifyItemInserted(adapterPosition);
@@ -852,7 +856,7 @@ public class DesignerNewsStory extends Activity {
 
                 HtmlUtils.parseMarkdownAndSetText(
                         holder.getComment(),
-                        comment.body,
+                        comment.getBody(),
                         markdown,
                         linksColor,
                         highlightColor,
@@ -862,23 +866,21 @@ public class DesignerNewsStory extends Activity {
                                 .diskCacheStrategy(DiskCacheStrategy.ALL)
                                 .into(new ImageSpanTarget(holder.getComment(), loadingSpan)));
 
-                if (comment.user_display_name != null) {
-                    holder.getAuthor().setText(comment.user_display_name.toLowerCase());
-                }
-                holder.getAuthor().setOriginalPoster(isOP(comment.getLinks().getUserId()));
-                if (comment.created_at != null) {
-                    holder.getTimeAgo().setText(
-                            DateUtils.getRelativeTimeSpanString(comment.created_at.getTime(),
-                                    System.currentTimeMillis(),
-                                    DateUtils.SECOND_IN_MILLIS)
-                                    .toString().toLowerCase());
-                }
+                comment.getUserDisplayName();
+                holder.getAuthor().setText(comment.getUserDisplayName().toLowerCase());
+                holder.getAuthor().setOriginalPoster(isOP(comment.getUserId()));
+                comment.getCreated_at();
+                holder.getTimeAgo().setText(
+                        DateUtils.getRelativeTimeSpanString(comment.getCreated_at().getTime(),
+                                System.currentTimeMillis(),
+                                DateUtils.SECOND_IN_MILLIS)
+                                .toString().toLowerCase());
                 // FIXME updating drawable doesn't seem to be working, just create a new one
                 //((ThreadedCommentDrawable) holder.threadDepth.getDrawable())
                 //     .setDepth(comment.depth);
 
                 holder.getThreadDepth().setImageDrawable(
-                        new ThreadedCommentDrawable(threadWidth, threadGap, comment.depth));
+                        new ThreadedCommentDrawable(threadWidth, threadGap, comment.getDepth()));
             }
 
             // set/clear expanded comment state
@@ -937,15 +939,16 @@ public class DesignerNewsStory extends Activity {
                 Comment comment) {
             if (isUserLoggedIn) {
                 if (!holder.getCommentVotes().isActivated()) {
-                    upvoteComment(comment.id);
-                    comment.upvoted = true;
-                    comment.vote_count++;
-                    holder.getCommentVotes().setText(String.valueOf(comment.vote_count));
+                    upvoteComment(comment.getId());
+                    comment.setUpvoted(true);
+                    // TODO fix this
+//                    comment.setVoteCount(comment.getVoteCount() + 1);
+                    holder.getCommentVotes().setText(String.valueOf(comment.getVoteCount()));
                     holder.getCommentVotes().setActivated(true);
                 } else {
-                    comment.upvoted = false;
-                    comment.vote_count--;
-                    holder.getCommentVotes().setText(String.valueOf(comment.vote_count));
+                    comment.setUpvoted(false);
+//                    comment.setVoteCount(comment.getVoteCount() - 1);
+                    holder.getCommentVotes().setText(String.valueOf(comment.getVoteCount()));
                     holder.getCommentVotes().setActivated(false);
                     // TODO actually delete upvote - florina: why?
                 }
@@ -1035,20 +1038,26 @@ public class DesignerNewsStory extends Activity {
 
                     // insert a locally created comment before actually
                     // hitting the API for immediate response
-                    int replyDepth = replyingTo.depth + 1;
+                    int replyDepth = replyingTo.getDepth() + 1;
                     User user = designerNewsPrefs.getUser();
+                    String commentBody = holder.getCommentReply().getText().toString();
                     final int newReplyPosition = commentsAdapter.addCommentReply(
-                            new Comment.Builder()
-                                    .setBody(holder.getCommentReply().getText().toString())
-                                    .setCreatedAt(new Date())
-                                    .setDepth(replyDepth)
-                                    .setUserId(user.getId())
-                                    .setUserDisplayName(user.getDisplayName())
-                                    .setUserPortraitUrl(user.getPortraitUrl())
-                                    .build(),
+                            new Comment(
+                                    0,
+                                    replyingTo.getId(),
+                                    commentBody,
+                                    new Date(),
+                                    replyDepth,
+                                    0,
+                                    Collections.emptyList(),
+                                    user.getId(),
+                                    user.getDisplayName(),
+                                    user.getPortraitUrl(),
+                                    false
+                            ),
                             inReplyToCommentPosition);
 
-                    replyToComment(replyingTo.id, reply);
+                    replyToComment(replyingTo.getId(), reply);
                     holder.getCommentReply().getText().clear();
                     ImeUtils.hideIme(holder.getCommentReply());
                     commentsList.scrollToPosition(newReplyPosition);
